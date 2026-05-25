@@ -104,6 +104,8 @@ final class ProxyConfig {
 	}
 
 	public function should_bypass_url( $url ) {
+		// wp_parse_url() is not available before WordPress loads.
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url
 		$parts = parse_url( $url );
 
 		if ( ! is_array( $parts ) || empty( $parts['host'] ) ) {
@@ -172,6 +174,8 @@ final class ProxyConfig {
 	 * @return array<string, mixed>|null
 	 */
 	private static function parse_url( $url ) {
+		// wp_parse_url() is not available before WordPress loads.
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url
 		$parts = parse_url( $url );
 
 		if ( ! is_array( $parts ) || empty( $parts['host'] ) || empty( $parts['port'] ) ) {

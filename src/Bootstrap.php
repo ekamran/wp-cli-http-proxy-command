@@ -23,11 +23,14 @@ final class Bootstrap {
 	}
 
 	private static function define_wordpress_constants( ProxyConfig $config ) {
+		// These are the proxy constants consumed by WordPress core.
 		if ( ! defined( 'WP_PROXY_HOST' ) ) {
+			// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedConstantFound
 			define( 'WP_PROXY_HOST', $config->host() );
 		}
 
 		if ( ! defined( 'WP_PROXY_PORT' ) ) {
+			// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedConstantFound
 			define( 'WP_PROXY_PORT', $config->port() );
 		}
 
@@ -36,10 +39,12 @@ final class Bootstrap {
 
 		if ( null !== $username && null !== $password ) {
 			if ( ! defined( 'WP_PROXY_USERNAME' ) ) {
+				// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedConstantFound
 				define( 'WP_PROXY_USERNAME', $username );
 			}
 
 			if ( ! defined( 'WP_PROXY_PASSWORD' ) ) {
+				// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedConstantFound
 				define( 'WP_PROXY_PASSWORD', $password );
 			}
 		}
@@ -47,6 +52,7 @@ final class Bootstrap {
 		$bypass_hosts = $config->bypass_hosts();
 
 		if ( null !== $bypass_hosts && ! defined( 'WP_PROXY_BYPASS_HOSTS' ) ) {
+			// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedConstantFound
 			define( 'WP_PROXY_BYPASS_HOSTS', $bypass_hosts );
 		}
 	}
