@@ -9,6 +9,11 @@ Add an `http-proxy` block to `wp-cli.yml`:
     http-proxy:
       url: http://proxy.example.com:8080
 
+Scheme-less proxy URLs are supported too:
+
+    http-proxy:
+      url: proxy.example.com:8080
+
 Or configure host and port separately:
 
     http-proxy:
@@ -49,3 +54,15 @@ Perform a test request through WP-CLI's HTTP helper:
 - Normalizes proxy URLs to Requests' `host:port` format.
 - Applies `bypass-hosts` to WordPress and WP-CLI HTTP requests.
 - Can be disabled with `enabled: false` or bypassed with `--skip-packages`.
+
+## Development
+
+Install dependencies:
+
+    composer install
+
+Run the local checks:
+
+    composer test
+
+The Behat suite covers the opt-in config paths, safe environment variable handling, a local proxy request, and bypass host behavior.

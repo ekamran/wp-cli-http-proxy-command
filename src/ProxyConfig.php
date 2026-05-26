@@ -174,6 +174,10 @@ final class ProxyConfig {
 	 * @return array<string, mixed>|null
 	 */
 	private static function parse_url( $url ) {
+		if ( false === strpos( $url, '://' ) ) {
+			$url = 'http://' . $url;
+		}
+
 		// wp_parse_url() is not available before WordPress loads.
 		// phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url
 		$parts = parse_url( $url );

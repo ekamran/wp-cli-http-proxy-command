@@ -2,6 +2,7 @@
 
 namespace WP_CLI\HttpProxy;
 
+use RuntimeException;
 use WP_CLI;
 use WP_CLI\Utils;
 
@@ -32,16 +33,20 @@ final class Command {
 	public function check( $args ) {
 		list( $url ) = $args;
 
-		$response = Utils\http_request(
-			'GET',
-			$url,
-			null,
-			[],
-			[
-				'halt_on_error' => false,
-				'max_retries'   => 1,
-			]
-		);
+		try {
+			$response = Utils\http_request(
+				'GET',
+				$url,
+				null,
+				[],
+				[
+					'halt_on_error' => false,
+					'max_retries'   => 1,
+				]
+			);
+		} catch ( RuntimeException $exception ) {
+			WP_CLI::error( $exception->getMessage() );
+		}
 
 		WP_CLI::line( 'Status: ' . $response->status_code );
 		WP_CLI::line( 'Body: ' . $response->body );

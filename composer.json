@@ -7,6 +7,18 @@
     "require": {
         "wp-cli/wp-cli": "^2.13"
     },
+    "require-dev": {
+        "wp-cli/wp-cli-tests": "^5"
+    },
+    "config": {
+        "process-timeout": 7200,
+        "sort-packages": true,
+        "allow-plugins": {
+            "dealerdirect/phpcodesniffer-composer-installer": true,
+            "phpstan/extension-installer": true
+        },
+        "lock": false
+    },
     "autoload": {
         "files": [
             "http-proxy-command.php"
@@ -23,7 +35,13 @@
     "minimum-stability": "dev",
     "prefer-stable": true,
     "scripts": {
+        "behat": "run-behat-tests",
         "phpcs": "phpcs",
-        "lint": "find . -name '*.php' -print0 | xargs -0 -n1 php -l"
+        "lint": "find http-proxy-command.php src -name '*.php' -print0 | xargs -0 -n1 php -l",
+        "test": [
+            "@lint",
+            "@phpcs",
+            "@behat"
+        ]
     }
 }
