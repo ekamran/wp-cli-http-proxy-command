@@ -2,6 +2,8 @@
 
 Configure an opt-in HTTP proxy for both WordPress core requests and WP-CLI's own HTTP requests.
 
+Requires WP-CLI 2.12.0 or newer.
+
 ## Configuration
 
 Add an `http-proxy` block to `wp-cli.yml`:
