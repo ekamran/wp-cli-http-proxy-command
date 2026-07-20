@@ -60,8 +60,8 @@ final class Bootstrap {
 	private static function configure_wp_cli_requests( ProxyConfig $config ) {
 		WP_CLI::add_hook(
 			'http_request_options',
-			static function ( $options, $method, $url ) use ( $config ) {
-				if ( ! $config->should_bypass_url( $url ) ) {
+			static function ( $options, $method = null, $url = null ) use ( $config ) {
+				if ( null === $url || ! $config->should_bypass_url( $url ) ) {
 					$options['proxy'] = $config->requests_proxy();
 				}
 
