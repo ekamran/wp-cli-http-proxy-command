@@ -51,10 +51,10 @@ Perform a test request through WP-CLI's HTTP helper:
 
 ## Behavior
 
-- Defines WordPress proxy constants when proxy configuration is enabled.
+- Defines missing WordPress proxy constants after `wp-config.php` loads.
 - Configures WP-CLI's own HTTP requests through `http_request_options`.
 - Normalizes proxy URLs to Requests' `host:port` format.
-- Applies `bypass-hosts` to WordPress and WP-CLI HTTP requests.
+- Applies `bypass-hosts` to WordPress and WP-CLI HTTP requests when the request URL is available.
 - Can be disabled with `enabled: false` or bypassed with `--skip-packages`.
 
 ## Development

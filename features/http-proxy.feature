@@ -147,8 +147,8 @@ Feature: HTTP proxy configuration
       Bypass hosts: localhost,*.test
       """
 
-  Scenario: Define WordPress proxy constants
-    Given an empty directory
+  Scenario: Define WordPress proxy constants after wp-config.php loads
+    Given a WP install
     And a wp-cli.yml file:
       """
       http-proxy:
@@ -157,10 +157,34 @@ Feature: HTTP proxy configuration
           - localhost
       """
 
-    When I run `wp eval 'echo WP_PROXY_HOST . ":" . WP_PROXY_PORT . ":" . WP_PROXY_USERNAME . ":" . WP_PROXY_PASSWORD . ":" . WP_PROXY_BYPASS_HOSTS;' --skip-wordpress`
+    When I run `wp eval 'echo WP_PROXY_HOST . ":" . WP_PROXY_PORT . ":" . WP_PROXY_USERNAME . ":" . WP_PROXY_PASSWORD . ":" . WP_PROXY_BYPASS_HOSTS;'`
     Then STDOUT should be:
       """
       proxy.example.com:8086:user:pass:localhost
+      """
+
+  Scenario: Keep existing WordPress proxy constants from wp-config.php
+    Given a WP install
+    When I run `wp config set WP_PROXY_HOST existing.proxy --type=constant`
+    And I run `wp config set WP_PROXY_PORT 3128 --raw --type=constant`
+    And a wp-cli.yml file:
+      """
+      http-proxy:
+        host: proxy.example.com
+        port: 8086
+      """
+
+    When I run `wp eval 'echo WP_PROXY_HOST . ":" . WP_PROXY_PORT;'`
+    Then STDOUT should be:
+      """
+      existing.proxy:3128
+      """
+    And STDERR should be empty
+
+    When I run `wp eval 'var_export( WP_CLI::do_hook( "http_request_options", [], "GET", "http://example.com" ) );'`
+    Then STDOUT should contain:
+      """
+      'proxy' => 'existing.proxy:3128'
       """
 
   Scenario: Check a URL through a configured proxy

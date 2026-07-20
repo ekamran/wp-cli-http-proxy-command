@@ -9,8 +9,13 @@ final class Bootstrap {
 		$config = ProxyConfig::from_runner();
 
 		if ( $config ) {
-			self::define_wordpress_constants( $config );
 			self::configure_wp_cli_requests( $config );
+			WP_CLI::add_hook(
+				'after_wp_config_load',
+				static function () use ( $config ) {
+					self::define_wordpress_constants( $config );
+				}
+			);
 		}
 
 		WP_CLI::add_command(
@@ -61,12 +66,36 @@ final class Bootstrap {
 		WP_CLI::add_hook(
 			'http_request_options',
 			static function ( $options, $method = null, $url = null ) use ( $config ) {
-				if ( null === $url || ! $config->should_bypass_url( $url ) ) {
-					$options['proxy'] = $config->requests_proxy();
+				if ( null === $url || ! self::should_bypass_url( $config, $url ) ) {
+					$options['proxy'] = self::requests_proxy( $config );
 				}
 
 				return $options;
 			}
 		);
+	}
+
+	private static function requests_proxy( ProxyConfig $config ) {
+		if ( defined( 'WP_PROXY_HOST' ) && defined( 'WP_PROXY_PORT' ) ) {
+			$proxy = WP_PROXY_HOST . ':' . WP_PROXY_PORT;
+
+			if ( defined( 'WP_PROXY_USERNAME' ) && defined( 'WP_PROXY_PASSWORD' ) ) {
+				return [ $proxy, WP_PROXY_USERNAME, WP_PROXY_PASSWORD ];
+			}
+
+			return $proxy;
+		}
+
+		return $config->requests_proxy();
+	}
+
+	private static function should_bypass_url( ProxyConfig $config, $url ) {
+		if ( defined( 'WP_PROXY_BYPASS_HOSTS' ) ) {
+			$bypass_hosts = array_map( 'trim', explode( ',', WP_PROXY_BYPASS_HOSTS ) );
+
+			return ProxyConfig::url_matches_bypass_hosts( $url, $bypass_hosts );
+		}
+
+		return $config->should_bypass_url( $url );
 	}
 }

@@ -104,6 +104,25 @@ final class ProxyConfig {
 	}
 
 	public function should_bypass_url( $url ) {
+		return self::url_matches_bypass_hosts( $url, $this->bypass_hosts_list() );
+	}
+
+	public function requests_proxy() {
+		$proxy    = $this->host() . ':' . $this->port();
+		$username = $this->username();
+		$password = $this->password();
+
+		if ( null !== $username && null !== $password ) {
+			return [ $proxy, $username, $password ];
+		}
+
+		return $proxy;
+	}
+
+	/**
+	 * @param string[] $bypass_hosts
+	 */
+	public static function url_matches_bypass_hosts( $url, array $bypass_hosts ) {
 		// wp_parse_url() is not available before WordPress loads.
 		// phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url
 		$parts = parse_url( $url );
@@ -114,8 +133,12 @@ final class ProxyConfig {
 
 		$host = strtolower( (string) $parts['host'] );
 
-		foreach ( $this->bypass_hosts_list() as $pattern ) {
-			$pattern = strtolower( $pattern );
+		foreach ( $bypass_hosts as $pattern ) {
+			$pattern = strtolower( trim( $pattern ) );
+
+			if ( '' === $pattern ) {
+				continue;
+			}
 
 			if ( $host === $pattern ) {
 				return true;
@@ -129,18 +152,6 @@ final class ProxyConfig {
 		}
 
 		return false;
-	}
-
-	public function requests_proxy() {
-		$proxy    = $this->host() . ':' . $this->port();
-		$username = $this->username();
-		$password = $this->password();
-
-		if ( null !== $username && null !== $password ) {
-			return [ $proxy, $username, $password ];
-		}
-
-		return $proxy;
 	}
 
 	/**
