@@ -1,8 +1,8 @@
 # WP-CLI HTTP Proxy Command
 
-Configure an opt-in HTTP proxy for both WordPress core requests and WP-CLI's own HTTP requests.
+Configure an opt-in HTTP proxy for WordPress core requests and WP-CLI requests made through its HTTP helper.
 
-Requires WP-CLI 2.12.0 or newer.
+Requires WP-CLI 2.12.0 or later in the 2.x release line.
 
 ## Configuration
 
@@ -56,6 +56,10 @@ Perform a test request through WP-CLI's HTTP helper:
 - Normalizes proxy URLs to Requests' `host:port` format.
 - Applies `bypass-hosts` to WordPress and WP-CLI HTTP requests when the request URL is available.
 - Can be disabled with `enabled: false` or bypassed with `--skip-packages`.
+
+## Limitations
+
+Composer-backed `wp package` commands, including `browse`, `list`, `install`, and `update`, use a separate HTTP client. Their network requests are not configured by this package.
 
 ## Development
 

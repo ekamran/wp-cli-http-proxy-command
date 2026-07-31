@@ -1,7 +1,7 @@
 {
     "name": "ekamran/wp-cli-http-proxy-command",
     "type": "wp-cli-package",
-    "description": "Configure an opt-in HTTP proxy for WordPress and WP-CLI requests.",
+    "description": "Configure an opt-in HTTP proxy for WordPress and WP-CLI HTTP helper requests.",
     "homepage": "https://github.com/ekamran/wp-cli-http-proxy-command",
     "license": "MIT",
     "require": {
