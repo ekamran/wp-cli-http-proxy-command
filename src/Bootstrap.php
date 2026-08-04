@@ -3,10 +3,19 @@
 namespace WP_CLI\HttpProxy;
 
 use WP_CLI;
+use WP_CLI\RequestsLibrary;
 
 final class Bootstrap {
+	/** @var bool */
+	private static $initialized = false;
+
 	public static function init() {
-		$config = ProxyConfig::from_runner();
+		if ( self::$initialized ) {
+			return;
+		}
+
+		self::$initialized = true;
+		$config            = ProxyConfig::from_runner();
 
 		if ( $config ) {
 			self::configure_wp_cli_requests( $config );
@@ -65,14 +74,74 @@ final class Bootstrap {
 	private static function configure_wp_cli_requests( ProxyConfig $config ) {
 		WP_CLI::add_hook(
 			'http_request_options',
-			static function ( $options, $method = null, $url = null ) use ( $config ) {
-				if ( null === $url || ! self::should_bypass_url( $config, $url ) ) {
-					$options['proxy'] = self::requests_proxy( $config );
+			static function ( $options ) use ( $config ) {
+				RequestsLibrary::register_autoloader();
+
+				if ( empty( $options['hooks'] ) ) {
+					$options['hooks'] = self::requests_hooks();
 				}
+
+				// Requests exposes the URL here in both WP-CLI 2.x and 3.x.
+				self::register_requests_proxy( $options['hooks'], $config );
+				$options['proxy'] = false;
 
 				return $options;
 			}
 		);
+	}
+
+	private static function requests_hooks() {
+		$class = RequestsLibrary::is_v1() ? '\\Requests_Hooks' : '\\WpOrg\\Requests\\Hooks';
+
+		return new $class();
+	}
+
+	private static function register_requests_proxy( $hooks, ProxyConfig $config ) {
+		$proxy_class   = RequestsLibrary::is_v1() ? '\\Requests_Proxy_HTTP' : '\\WpOrg\\Requests\\Proxy\\Http';
+		$proxy         = new $proxy_class( self::requests_proxy( $config ) );
+		$proxy_enabled = false;
+
+		$hooks->register(
+			'requests.before_request',
+			static function ( $url ) use ( $config, &$proxy_enabled ) {
+				$proxy_enabled = ! self::should_bypass_url( $config, $url );
+			}
+		);
+		$hooks->register(
+			'curl.before_send',
+			static function ( &$handle ) use ( $proxy, &$proxy_enabled ) {
+				if ( $proxy_enabled ) {
+					$proxy->curl_before_send( $handle );
+				}
+			}
+		);
+		$hooks->register(
+			'fsockopen.remote_socket',
+			static function ( &$remote_socket ) use ( $proxy, &$proxy_enabled ) {
+				if ( $proxy_enabled ) {
+					$proxy->fsockopen_remote_socket( $remote_socket );
+				}
+			}
+		);
+		$hooks->register(
+			'fsockopen.remote_host_path',
+			static function ( &$path, $url ) use ( $proxy, &$proxy_enabled ) {
+				if ( $proxy_enabled ) {
+					$proxy->fsockopen_remote_host_path( $path, $url );
+				}
+			}
+		);
+
+		if ( $proxy->use_authentication ) {
+			$hooks->register(
+				'fsockopen.after_headers',
+				static function ( &$headers ) use ( $proxy, &$proxy_enabled ) {
+					if ( $proxy_enabled ) {
+						$proxy->fsockopen_header( $headers );
+					}
+				}
+			);
+		}
 	}
 
 	private static function requests_proxy( ProxyConfig $config ) {

@@ -2,7 +2,7 @@
 
 Configure an opt-in HTTP proxy for WordPress core requests and WP-CLI requests made through its HTTP helper.
 
-Requires WP-CLI 2.12.0 or later in the 2.x release line.
+Requires PHP 7.2.24 or later and WP-CLI 2.12 or later.
 
 ## Configuration
 
@@ -38,6 +38,9 @@ Environment variables are not read by default. To opt into environment lookup:
       env: true
 
 When `env: true` is set, the command checks `HTTPS_PROXY`, `https_proxy`, `HTTP_PROXY`, then `http_proxy`.
+The first non-empty value is used as one proxy for all supported requests. `NO_PROXY` and `no_proxy` are not read; configure those hosts with `bypass-hosts`.
+
+Proxy credentials in `wp-cli.yml` are stored as plain text. Keep configuration containing credentials out of version control and restrict access to the file, or use an appropriate secret-management mechanism.
 
 ## Commands
 
@@ -52,14 +55,17 @@ Perform a test request through WP-CLI's HTTP helper:
 ## Behavior
 
 - Defines missing WordPress proxy constants after `wp-config.php` loads.
-- Configures WP-CLI's own HTTP requests through `http_request_options`.
+- Configures WP-CLI's own HTTP requests through its Requests hooks.
 - Normalizes proxy URLs to Requests' `host:port` format.
 - Applies `bypass-hosts` to WordPress and WP-CLI HTTP requests when the request URL is available.
+- Requires an explicit proxy port in URL and host/port configuration.
 - Can be disabled with `enabled: false` or bypassed with `--skip-packages`.
 
 ## Limitations
 
-Composer-backed `wp package` commands, including `browse`, `list`, `install`, and `update`, use a separate HTTP client. Their network requests are not configured by this package.
+This package covers WordPress core requests and WP-CLI requests that use `WP_CLI\Utils\http_request()`. Commands that use another HTTP client are outside that path.
+
+In particular, the Composer and package-index networking used by `wp package browse`, `list`, `install`, and `update` is separate and is not configured by this package. Individual command paths that call WP-CLI's HTTP helper directly can still use the proxy.
 
 ## Development
 
@@ -71,4 +77,4 @@ Run the local checks:
 
     composer test
 
-The Behat suite covers the opt-in config paths, safe environment variable handling, a local proxy request, and bypass host behavior.
+The Behat suite covers opt-in config paths, environment handling, credentials, real local proxy and bypass requests through both WordPress and WP-CLI, and clean failure behavior.

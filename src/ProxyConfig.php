@@ -11,13 +11,13 @@ final class ProxyConfig {
 	private $config;
 
 	/**
-	 * @var array<string, mixed>
+	 * @var array{host: string, port: int|string, user?: string, pass?: string}
 	 */
 	private $parts;
 
 	/**
 	 * @param array<string, mixed> $config
-	 * @param array<string, mixed> $parts
+	 * @param array{host: string, port: int|string, user?: string, pass?: string} $parts
 	 */
 	private function __construct( array $config, array $parts ) {
 		$this->config = $config;
@@ -56,11 +56,11 @@ final class ProxyConfig {
 
 	public function username() {
 		if ( isset( $this->config['username'] ) ) {
-			return rawurldecode( (string) $this->config['username'] );
+			return self::config_string( $this->config['username'] );
 		}
 
 		if ( isset( $this->parts['user'] ) ) {
-			return rawurldecode( (string) $this->parts['user'] );
+			return rawurldecode( $this->parts['user'] );
 		}
 
 		return null;
@@ -68,11 +68,11 @@ final class ProxyConfig {
 
 	public function password() {
 		if ( isset( $this->config['password'] ) ) {
-			return rawurldecode( (string) $this->config['password'] );
+			return self::config_string( $this->config['password'] );
 		}
 
 		if ( isset( $this->parts['pass'] ) ) {
-			return rawurldecode( (string) $this->parts['pass'] );
+			return rawurldecode( $this->parts['pass'] );
 		}
 
 		return null;
@@ -84,10 +84,17 @@ final class ProxyConfig {
 		}
 
 		if ( is_array( $this->config['bypass-hosts'] ) ) {
-			return implode( ',', array_map( 'strval', $this->config['bypass-hosts'] ) );
+			$hosts = array_filter(
+				array_map( [ self::class, 'config_string' ], $this->config['bypass-hosts'] ),
+				static function ( $host ) {
+					return null !== $host;
+				}
+			);
+
+			return $hosts ? implode( ',', $hosts ) : null;
 		}
 
-		return (string) $this->config['bypass-hosts'];
+		return self::config_string( $this->config['bypass-hosts'] );
 	}
 
 	/**
@@ -156,17 +163,28 @@ final class ProxyConfig {
 
 	/**
 	 * @param array<string, mixed> $config
-	 * @return array<string, mixed>|null
+	 * @return array{host: string, port: int|string, user?: string, pass?: string}|null
 	 */
 	private static function resolve_parts( array $config ) {
-		if ( ! empty( $config['url'] ) ) {
-			return self::parse_url( (string) $config['url'] );
+		if ( isset( $config['url'] ) ) {
+			$url = self::config_string( $config['url'] );
+
+			if ( null !== $url && '' !== $url ) {
+				return self::parse_url( $url );
+			}
 		}
 
-		if ( ! empty( $config['host'] ) && ! empty( $config['port'] ) ) {
+		if ( isset( $config['host'], $config['port'] ) ) {
+			$host = self::config_string( $config['host'] );
+			$port = self::normalize_port( $config['port'] );
+
+			if ( null === $host || '' === $host || null === $port ) {
+				return null;
+			}
+
 			return [
-				'host' => (string) $config['host'],
-				'port' => (string) $config['port'],
+				'host' => $host,
+				'port' => $port,
 			];
 		}
 
@@ -182,7 +200,7 @@ final class ProxyConfig {
 	}
 
 	/**
-	 * @return array<string, mixed>|null
+	 * @return array{host: string, port: int|string, user?: string, pass?: string}|null
 	 */
 	private static function parse_url( $url ) {
 		if ( false === strpos( $url, '://' ) ) {
@@ -193,11 +211,52 @@ final class ProxyConfig {
 		// phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url
 		$parts = parse_url( $url );
 
-		if ( ! is_array( $parts ) || empty( $parts['host'] ) || empty( $parts['port'] ) ) {
+		if ( ! is_array( $parts ) || empty( $parts['host'] ) || ! isset( $parts['port'] ) ) {
 			return null;
 		}
 
-		return $parts;
+		$port = self::normalize_port( $parts['port'] );
+
+		if ( null === $port ) {
+			return null;
+		}
+
+		$normalized = [
+			'host' => $parts['host'],
+			'port' => $port,
+		];
+
+		if ( isset( $parts['user'] ) ) {
+			$normalized['user'] = $parts['user'];
+		}
+
+		if ( isset( $parts['pass'] ) ) {
+			$normalized['pass'] = $parts['pass'];
+		}
+
+		return $normalized;
+	}
+
+	private static function normalize_port( $port ) {
+		if ( ! is_int( $port ) && ! is_string( $port ) ) {
+			return null;
+		}
+
+		if ( ! ctype_digit( (string) $port ) ) {
+			return null;
+		}
+
+		$port = (int) $port;
+
+		return $port >= 1 && $port <= 65535 ? $port : null;
+	}
+
+	private static function config_string( $value ) {
+		if ( ! is_string( $value ) && ! is_int( $value ) && ! is_float( $value ) ) {
+			return null;
+		}
+
+		return (string) $value;
 	}
 
 	private static function proxy_env() {

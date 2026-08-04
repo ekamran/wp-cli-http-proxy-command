@@ -1,0 +1,84 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  code-quality:
+    name: Code quality
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Check out source code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2
+        with:
+          php-version: '8.3'
+          coverage: none
+          tools: composer
+
+      - name: Install dependencies
+        run: composer install --no-interaction --prefer-dist
+
+      - name: Validate Composer configuration
+        run: composer validate --strict
+
+      - name: Run PHP lint
+        run: composer lint
+
+      - name: Run PHPCS
+        run: composer phpcs
+
+      - name: Run PHPStan
+        run: composer phpstan
+
+  test:
+    name: WP-CLI ${{ matrix.wp_cli }} / PHP ${{ matrix.php }} / WordPress ${{ matrix.wordpress }}
+    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - php: '7.2'
+            wordpress: '6.9'
+            wp_cli: '^2.12'
+          - php: '8.5'
+            wordpress: latest
+            wp_cli: '^2.12'
+          - php: '8.5'
+            wordpress: latest
+            wp_cli: '3.0.x-dev'
+
+    steps:
+      - name: Check out source code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: pdo_sqlite, zip
+          coverage: none
+          tools: composer
+
+      - name: Install dependencies
+        run: composer update --with "wp-cli/wp-cli:${{ matrix.wp_cli }}" --no-interaction --prefer-dist
+
+      - name: Run Behat
+        env:
+          WP_VERSION: ${{ matrix.wordpress }}
+          WP_CLI_TEST_DBTYPE: sqlite
+        run: composer behat

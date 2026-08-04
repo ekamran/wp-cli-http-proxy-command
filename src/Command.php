@@ -32,6 +32,7 @@ final class Command {
 	 */
 	public function check( $args ) {
 		list( $url ) = $args;
+		$response    = null;
 
 		try {
 			$response = Utils\http_request(
@@ -48,7 +49,12 @@ final class Command {
 			WP_CLI::error( $exception->getMessage() );
 		}
 
-		WP_CLI::line( 'Status: ' . $response->status_code );
-		WP_CLI::line( 'Body: ' . $response->body );
+		if ( $response instanceof \WpOrg\Requests\Response ) {
+			WP_CLI::line( 'Status: ' . $response->status_code );
+			WP_CLI::line( 'Body: ' . $response->body );
+			return;
+		}
+
+		WP_CLI::error( 'WP-CLI returned an unexpected HTTP response.' );
 	}
 }

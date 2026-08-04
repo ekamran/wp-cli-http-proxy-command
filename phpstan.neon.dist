@@ -1,0 +1,15 @@
+parameters:
+  level: 9
+  paths:
+    - src
+    - http-proxy-command.php
+  scanDirectories:
+    - vendor/wp-cli/wp-cli/php
+    - vendor/wp-cli/wp-cli/bundle/rmccue/requests/src
+  scanFiles:
+    - vendor/php-stubs/wordpress-stubs/wordpress-stubs.php
+    - phpstan-stubs/requests-v1.stub
+  treatPhpDocTypesAsCertain: false
+  ignoreErrors:
+    - identifier: missingType.parameter
+    - identifier: missingType.return

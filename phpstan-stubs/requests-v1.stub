@@ -1,0 +1,20 @@
+<?php
+
+class Requests_Hooks {
+	public function register( $hook, $callback, $priority = 0 ) {}
+}
+
+class Requests_Proxy_HTTP {
+	/** @var bool */
+	public $use_authentication;
+
+	public function __construct( $args = null ) {}
+
+	public function curl_before_send( &$handle ) {}
+
+	public function fsockopen_remote_socket( &$remote_socket ) {}
+
+	public function fsockopen_remote_host_path( &$path, $url ) {}
+
+	public function fsockopen_header( &$headers ) {}
+}
