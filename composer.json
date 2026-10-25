@@ -4,6 +4,12 @@
     "description": "Configure an opt-in HTTP proxy for WordPress and WP-CLI HTTP helper requests.",
     "homepage": "https://github.com/ekamran/wp-cli-http-proxy-command",
     "license": "MIT",
+    "authors": [
+        {
+            "name": "Kamran Abdul Aziz",
+            "homepage": "https://ekamran.com"
+        }
+    ],
     "require": {
         "php": ">=7.2.24",
         "wp-cli/wp-cli": "^2.12 || ^3.0"
