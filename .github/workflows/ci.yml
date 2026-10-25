@@ -5,6 +5,9 @@ on:
   push:
     branches:
       - main
+  schedule:
+    # Weekly, so a change in WP-CLI, its test framework or a plugin they download shows up without a push.
+    - cron: '17 3 * * 1'
   workflow_dispatch:
 
 permissions:
@@ -46,16 +49,27 @@ jobs:
   test:
     name: WP-CLI ${{ matrix.wp_cli }} / PHP ${{ matrix.php }} / WordPress ${{ matrix.wordpress }}
     runs-on: ubuntu-22.04
+    # A hung step would otherwise hold the runner for GitHub's default of 6 hours.
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
+        # WP-CLI 2.12.0 is tested as the released phar, which is what users run. Requiring
+        # wp-cli/wp-cli 2.12 through Composer would pull in wp-cli-tests 5.0.11, which predates
+        # its fixes for the current SQLite integration plugin, so every scenario that installs
+        # WordPress fails in test setup.
+        #
+        # WP-CLI 2.12.0 on PHP 8.5 is not tested: the phar prints PHP 8.5 deprecation notices
+        # from libraries bundled in WP-CLI itself, and WP-CLI recommends its nightly build on
+        # PHP 8.5 (https://github.com/wp-cli/wp-cli/issues/6271). PHP 8.5 is tested with
+        # WP-CLI nightly instead.
         include:
           - php: '7.2'
             wordpress: '6.9'
-            wp_cli: '^2.12'
-          - php: '8.5'
+            wp_cli: '2.12.0'
+          - php: '8.4'
             wordpress: latest
-            wp_cli: '^2.12'
+            wp_cli: '2.12.0'
           - php: '8.5'
             wordpress: latest
             wp_cli: '3.0.x-dev'
@@ -71,11 +85,77 @@ jobs:
         with:
           php-version: ${{ matrix.php }}
           extensions: pdo_sqlite, zip
+          # setup-php's production php.ini leaves out E_DEPRECATED; report it in the test runs.
+          ini-values: error_reporting=E_ALL
           coverage: none
           tools: composer
 
+      # The test framework comes from WP-CLI's development line in every job; the phar jobs
+      # run it against the released phar through WP_CLI_BIN_DIR.
       - name: Install dependencies
-        run: composer update --with "wp-cli/wp-cli:${{ matrix.wp_cli }}" --no-interaction --prefer-dist
+        run: composer update --with "wp-cli/wp-cli:3.0.x-dev" --no-interaction --prefer-dist
+
+      - name: Download and verify the WP-CLI phar
+        if: ${{ matrix.wp_cli != '3.0.x-dev' }}
+        env:
+          WP_CLI_VERSION: ${{ matrix.wp_cli }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/wp-cli"
+          cd "$RUNNER_TEMP/wp-cli"
+          curl -fsSL -o "wp-cli-$WP_CLI_VERSION.phar" "https://github.com/wp-cli/wp-cli/releases/download/v$WP_CLI_VERSION/wp-cli-$WP_CLI_VERSION.phar"
+          curl -fsSL -o "wp-cli-$WP_CLI_VERSION.phar.sha512" "https://github.com/wp-cli/wp-cli/releases/download/v$WP_CLI_VERSION/wp-cli-$WP_CLI_VERSION.phar.sha512"
+          echo "$(cat "wp-cli-$WP_CLI_VERSION.phar.sha512")  wp-cli-$WP_CLI_VERSION.phar" | sha512sum -c -
+          mv "wp-cli-$WP_CLI_VERSION.phar" wp
+          chmod +x wp
+          echo "WP_CLI_BIN_DIR=$RUNNER_TEMP/wp-cli" >> "$GITHUB_ENV"
+
+      - name: Check the WP-CLI version under test
+        env:
+          WP_CLI_EXPECTED: ${{ matrix.wp_cli }}
+        run: |
+          if [ -n "${WP_CLI_BIN_DIR:-}" ]; then
+            version="$("$WP_CLI_BIN_DIR/wp" --version)"
+            echo "$version"
+            if [ "$version" != "WP-CLI $WP_CLI_EXPECTED" ]; then
+              echo "Expected exactly WP-CLI $WP_CLI_EXPECTED" >&2
+              exit 1
+            fi
+          else
+            version="$(vendor/bin/wp --version)"
+            echo "$version"
+            case "$version" in
+              'WP-CLI 3.'*) ;;
+              *) echo 'Expected WP-CLI 3.x' >&2; exit 1 ;;
+            esac
+          fi
+
+      # Installs the package the way users do, so the phar's own Composer checks the package's
+      # php and wp-cli/wp-cli requirements against this PHP and WP-CLI. A zip has no git data,
+      # so Composer does not try to guess a version from the pull request checkout.
+      - name: Install the package with the WP-CLI phar
+        if: ${{ matrix.wp_cli != '3.0.x-dev' }}
+        env:
+          WP_CLI_PACKAGES_DIR: ${{ runner.temp }}/wp-cli-packages
+        run: |
+          git archive --format=zip --prefix=wp-cli-http-proxy-command/ -o "$RUNNER_TEMP/package.zip" HEAD
+          "$WP_CLI_BIN_DIR/wp" package install "$RUNNER_TEMP/package.zip"
+          "$WP_CLI_BIN_DIR/wp" package list --fields=name,version
+          "$WP_CLI_BIN_DIR/wp" http-proxy status
+
+      # Shows the PHP settings the tests run with. The SQLite integration plugin the tests
+      # install needs SQLite 3.37.0 or newer.
+      - name: Show PHP settings and check the SQLite version
+        run: |
+          php <<'PHP'
+          <?php
+          echo 'PHP ', PHP_VERSION, ', memory_limit ', ini_get( 'memory_limit' ), ', error_reporting ', error_reporting(), ' (E_ALL is ', E_ALL, ')', PHP_EOL;
+          $version = ( new PDO( 'sqlite::memory:' ) )->query( 'SELECT sqlite_version()' )->fetchColumn();
+          echo 'SQLite ', $version, PHP_EOL;
+          if ( version_compare( $version, '3.37.0', '<' ) ) {
+              file_put_contents( 'php://stderr', "Expected SQLite 3.37.0 or newer\n" );
+              exit( 1 );
+          }
+          PHP
 
       - name: Run Behat
         env:
