@@ -14,6 +14,12 @@ Or install the development version from the `main` branch:
 
     wp package install ekamran/wp-cli-http-proxy-command:dev-main
 
+If `:@stable` fails with "Could not guess stable version", GitHub's API limit may have been reached. Wait for it to reset, or install a specific release from the [Releases](https://github.com/ekamran/wp-cli-http-proxy-command/releases) page, which skips that lookup:
+
+    wp package install ekamran/wp-cli-http-proxy-command:v0.1.0
+
+Replace `v0.1.0` with the latest version shown on the Releases page. With no API quota left, a fresh install worked in testing only when the machine had SSH access to GitHub.
+
 ## Compatibility
 
 Requires PHP 7.2.24 or later, and WP-CLI 2.12 or a later 2.x release, or WP-CLI 3.x.
