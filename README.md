@@ -18,7 +18,7 @@ If `:@stable` fails with "Could not guess stable version", GitHub's API limit ma
 
     wp package install ekamran/wp-cli-http-proxy-command:v0.1.0
 
-Replace `v0.1.0` with the latest version shown on the Releases page. With no API quota left, a fresh install worked in testing only when the machine had SSH access to GitHub.
+Replace `v0.1.0` with the latest stable version shown on the Releases page. With no API quota left, a fresh install worked in testing only when the machine had SSH access to GitHub.
 
 ## Compatibility
 
