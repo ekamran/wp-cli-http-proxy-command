@@ -136,6 +136,10 @@ jobs:
         if: ${{ matrix.wp_cli != '3.0.x-dev' }}
         env:
           WP_CLI_PACKAGES_DIR: ${{ runner.temp }}/wp-cli-packages
+          # setup-php saves the job's GitHub token in ~/.composer/auth.json. The Composer bundled
+          # in the 2.12.0 phar rejects GitHub's newer token format and puts the token in its error
+          # message (GHSA-f9f8-rm49-7jv2), so this step installs anonymously from an empty home.
+          COMPOSER_HOME: ${{ runner.temp }}/wp-cli-composer-home
         run: |
           git archive --format=zip --prefix=wp-cli-http-proxy-command/ -o "$RUNNER_TEMP/package.zip" HEAD
           "$WP_CLI_BIN_DIR/wp" package install "$RUNNER_TEMP/package.zip"
