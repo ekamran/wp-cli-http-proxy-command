@@ -2,7 +2,31 @@
 
 Configure an opt-in HTTP proxy for WordPress core requests and WP-CLI requests made through its HTTP helper.
 
-Requires PHP 7.2.24 or later and WP-CLI 2.12 or later.
+Built by [ShifteQ](https://shifteq.com).
+
+## Installation
+
+Install the latest release:
+
+    wp package install ekamran/wp-cli-http-proxy-command:@stable
+
+Or install the development version from the `main` branch:
+
+    wp package install ekamran/wp-cli-http-proxy-command:dev-main
+
+## Compatibility
+
+Requires PHP 7.2.24 or later, and WP-CLI 2.12 or a later 2.x release, or WP-CLI 3.x.
+
+Tested with:
+
+- WP-CLI 2.12.0 on PHP 7.2 and PHP 8.4.
+- WP-CLI nightly (3.0.0-alpha) on PHP 8.5.
+
+Known upstream limitations:
+
+- On PHP 8.5, WP-CLI 2.12 prints PHP deprecation notices from libraries bundled in WP-CLI itself ([wp-cli/wp-cli#6271](https://github.com/wp-cli/wp-cli/issues/6271)). WP-CLI recommends its nightly build on PHP 8.5 until a stable release with the fixes is out.
+- On PHP 8.4, when PHP reports deprecation notices, WP-CLI 2.12's `wp package install` and `wp package list` print them from libraries bundled in WP-CLI, such as Composer. The package still installs, and this package's own commands printed none in testing.
 
 ## Configuration
 
