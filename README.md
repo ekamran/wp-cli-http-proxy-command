@@ -97,6 +97,10 @@ This package covers WordPress core requests and WP-CLI requests that use `WP_CLI
 
 In particular, the Composer and package-index networking used by `wp package browse`, `list`, `install`, and `update` is separate and is not configured by this package. Individual command paths that call WP-CLI's HTTP helper directly can still use the proxy.
 
+Composer reads the standard proxy environment variables itself. To send those commands through a proxy, set `https_proxy` when you run them (uppercase `HTTPS_PROXY` also works):
+
+    https_proxy=http://proxy.example.com:8080 wp package update
+
 ## Development
 
 Install dependencies:
