@@ -2,6 +2,7 @@
 
 namespace WP_CLI\HttpProxy;
 
+use InvalidArgumentException;
 use WP_CLI;
 
 final class ProxyConfig {
@@ -25,25 +26,55 @@ final class ProxyConfig {
 	}
 
 	public static function from_runner() {
+		return self::load_from_runner()['config'];
+	}
+
+	/**
+	 * Reads the http-proxy configuration and explains any part of it that cannot be used.
+	 *
+	 * @return array{config: self|null, warnings: string[]}
+	 */
+	public static function load_from_runner() {
+		$none   = [
+			'config'   => null,
+			'warnings' => [],
+		];
 		$runner = WP_CLI::get_runner();
 
 		if ( ! $runner || empty( $runner->extra_config['http-proxy'] ) || ! is_array( $runner->extra_config['http-proxy'] ) ) {
-			return null;
+			return $none;
 		}
 
 		$config = $runner->extra_config['http-proxy'];
 
 		if ( isset( $config['enabled'] ) && ! self::to_bool( $config['enabled'] ) ) {
-			return null;
+			return $none;
 		}
 
-		$parts = self::resolve_parts( $config );
+		try {
+			$parts = self::resolve_parts( $config );
+		} catch ( InvalidArgumentException $exception ) {
+			return [
+				'config'   => null,
+				'warnings' => [ 'HTTP proxy disabled: ' . $exception->getMessage() ],
+			];
+		}
 
 		if ( ! $parts ) {
-			return null;
+			return $none;
 		}
 
-		return new self( $config, $parts );
+		$proxy    = new self( $config, $parts );
+		$warnings = [];
+
+		if ( ( null === $proxy->username() ) !== ( null === $proxy->password() ) ) {
+			$warnings[] = 'HTTP proxy authentication not used: set both a username and a password.';
+		}
+
+		return [
+			'config'   => $proxy,
+			'warnings' => $warnings,
+		];
 	}
 
 	public function host() {
@@ -162,47 +193,62 @@ final class ProxyConfig {
 	}
 
 	/**
+	 * Returns null when `env: true` finds no proxy environment variable.
+	 *
 	 * @param array<string, mixed> $config
 	 * @return array{host: string, port: int|string, user?: string, pass?: string}|null
+	 * @throws InvalidArgumentException When the configured proxy cannot be used.
 	 */
 	private static function resolve_parts( array $config ) {
 		if ( isset( $config['url'] ) ) {
 			$url = self::config_string( $config['url'] );
 
 			if ( null !== $url && '' !== $url ) {
-				return self::parse_url( $url );
+				return self::parse_proxy_url( $url, 'the http-proxy url' );
 			}
 		}
 
-		if ( isset( $config['host'], $config['port'] ) ) {
-			$host = self::config_string( $config['host'] );
-			$port = self::normalize_port( $config['port'] );
+		if ( isset( $config['host'] ) || isset( $config['port'] ) ) {
+			$host = isset( $config['host'] ) ? self::config_string( $config['host'] ) : null;
 
-			if ( null === $host || '' === $host || null === $port ) {
-				return null;
+			if ( null === $host || '' === $host || ! isset( $config['port'] ) ) {
+				throw new InvalidArgumentException( 'set both host and port in the http-proxy configuration.' );
 			}
 
-			return [
-				'host' => $host,
-				'port' => $port,
-			];
+			$port = self::normalize_port( $config['port'] );
+
+			if ( null === $port ) {
+				throw new InvalidArgumentException( 'the http-proxy port is not valid. Use a port from 1 to 65535.' );
+			}
+
+			// The host setting accepts a bare IPv6 address, which needs brackets next to a port.
+			if ( false !== filter_var( $host, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6 ) ) {
+				$host = '[' . $host . ']';
+			}
+
+			return self::parse_proxy_url( $host . ':' . $port, 'the http-proxy host' );
 		}
 
 		if ( ! empty( $config['env'] ) && self::to_bool( $config['env'] ) ) {
 			$env = self::proxy_env();
 
-			if ( $env ) {
-				return self::parse_url( $env );
+			if ( ! $env ) {
+				return null;
 			}
+
+			return self::parse_proxy_url( $env['value'], 'the ' . $env['name'] . ' environment variable' );
 		}
 
-		return null;
+		throw new InvalidArgumentException( 'the http-proxy configuration has no url, host and port, or env setting.' );
 	}
 
 	/**
-	 * @return array{host: string, port: int|string, user?: string, pass?: string}|null
+	 * @param string $url    Proxy URL. A URL without a scheme is treated as http://.
+	 * @param string $source Where the URL came from, for warnings.
+	 * @return array{host: string, port: int|string, user?: string, pass?: string}
+	 * @throws InvalidArgumentException When the URL is not a usable HTTP proxy address.
 	 */
-	private static function parse_url( $url ) {
+	private static function parse_proxy_url( $url, $source ) {
 		if ( false === strpos( $url, '://' ) ) {
 			$url = 'http://' . $url;
 		}
@@ -211,18 +257,38 @@ final class ProxyConfig {
 		// phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url
 		$parts = parse_url( $url );
 
-		if ( ! is_array( $parts ) || empty( $parts['host'] ) || ! isset( $parts['port'] ) ) {
-			return null;
+		if ( ! is_array( $parts ) || empty( $parts['host'] ) ) {
+			throw new InvalidArgumentException( $source . ' is not a valid proxy address.' );
+		}
+
+		$scheme = isset( $parts['scheme'] ) ? strtolower( $parts['scheme'] ) : 'http';
+
+		if ( 'http' !== $scheme ) {
+			throw new InvalidArgumentException( $source . ' uses ' . $scheme . '://, but only HTTP proxies (http://) are supported.' );
+		}
+
+		$host = $parts['host'];
+
+		if ( false !== strpos( $host, ':' ) && '[' !== $host[0] ) {
+			if ( false !== filter_var( $host, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6 ) ) {
+				throw new InvalidArgumentException( $source . ' has an IPv6 address without brackets. Use the form http://[2001:db8::1]:8080.' );
+			}
+
+			throw new InvalidArgumentException( $source . ' is not a valid proxy address.' );
+		}
+
+		if ( ! isset( $parts['port'] ) ) {
+			throw new InvalidArgumentException( $source . ' has no port. Add one, such as http://proxy.example.com:8080.' );
 		}
 
 		$port = self::normalize_port( $parts['port'] );
 
 		if ( null === $port ) {
-			return null;
+			throw new InvalidArgumentException( $source . ' has an invalid port. Use a port from 1 to 65535.' );
 		}
 
 		$normalized = [
-			'host' => $parts['host'],
+			'host' => $host,
 			'port' => $port,
 		];
 
@@ -259,12 +325,18 @@ final class ProxyConfig {
 		return (string) $value;
 	}
 
+	/**
+	 * @return array{name: string, value: string}|false
+	 */
 	private static function proxy_env() {
 		foreach ( [ 'HTTPS_PROXY', 'https_proxy', 'HTTP_PROXY', 'http_proxy' ] as $name ) {
 			$value = getenv( $name );
 
 			if ( false !== $value && '' !== $value ) {
-				return $value;
+				return [
+					'name'  => $name,
+					'value' => $value,
+				];
 			}
 		}
 

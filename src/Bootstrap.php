@@ -15,7 +15,12 @@ final class Bootstrap {
 		}
 
 		self::$initialized = true;
-		$config            = ProxyConfig::from_runner();
+		$loaded            = ProxyConfig::load_from_runner();
+		$config            = $loaded['config'];
+
+		foreach ( $loaded['warnings'] as $warning ) {
+			WP_CLI::warning( $warning );
+		}
 
 		if ( $config ) {
 			self::configure_wp_cli_requests( $config );
