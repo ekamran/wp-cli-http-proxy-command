@@ -62,13 +62,15 @@ Authentication and bypass hosts are supported:
         - localhost
         - "*.local"
 
-Environment variables are not read by default. To opt into environment lookup:
+This package does not read proxy environment variables by default. To use one as the package's proxy, opt in:
 
     http-proxy:
       env: true
 
-When `env: true` is set, the command checks `HTTPS_PROXY`, `https_proxy`, `HTTP_PROXY`, then `http_proxy`.
-The first non-empty value is used as one proxy for all supported requests. `NO_PROXY` and `no_proxy` are not read; configure those hosts with `bypass-hosts`.
+When `env: true` is set, the package checks `HTTPS_PROXY`, `https_proxy`, `HTTP_PROXY`, then `http_proxy`.
+The first non-empty value is used as one proxy for all supported requests. The package does not read `NO_PROXY` or `no_proxy`; configure those hosts with `bypass-hosts`.
+
+cURL also reads the standard proxy environment variables on its own, which can change where requests sent with PHP's cURL extension go. See [Limitations](#limitations).
 
 Proxy credentials in `wp-cli.yml` are stored as plain text. Keep configuration containing credentials out of version control and restrict access to the file, or use an appropriate secret-management mechanism.
 
@@ -94,6 +96,12 @@ Perform a test request through WP-CLI's HTTP helper:
 ## Limitations
 
 This package covers WordPress core requests and WP-CLI requests that use `WP_CLI\Utils\http_request()`. Commands that use another HTTP client are outside that path.
+
+When PHP's cURL extension sends a request, cURL also reads the standard proxy environment variables itself:
+
+- With no `http-proxy` configuration, HTTPS requests still go through a proxy set in `https_proxy`, even though `wp http-proxy status` shows the package as disabled.
+- A host listed in `no_proxy` or `NO_PROXY` skips the proxy configured by this package as well.
+- A request to a host in `bypass-hosts` goes to the proxy set in the environment, if there is one, instead of connecting directly.
 
 WP-CLI does not load installed packages for `wp package` commands, so this package configures none of their requests. This includes the Composer and package-index networking used by `wp package browse`, `list`, `install`, and `update`, and the requests these commands send through WP-CLI's HTTP helper.
 

@@ -6,7 +6,13 @@ use RuntimeException;
 use WP_CLI;
 use WP_CLI\Utils;
 
+/**
+ * Shows the HTTP proxy configuration and tests requests through it.
+ */
 final class Command {
+	/**
+	 * Shows the current HTTP proxy configuration.
+	 */
 	public function status() {
 		$config = ProxyConfig::from_runner();
 
@@ -49,7 +55,8 @@ final class Command {
 			WP_CLI::error( $exception->getMessage() );
 		}
 
-		if ( $response instanceof \WpOrg\Requests\Response ) {
+		// Inside a WordPress install older than 6.2, WP-CLI uses that install's Requests 1.x.
+		if ( $response instanceof \WpOrg\Requests\Response || $response instanceof \Requests_Response ) {
 			WP_CLI::line( 'Status: ' . $response->status_code );
 			WP_CLI::line( 'Body: ' . $response->body );
 			return;
