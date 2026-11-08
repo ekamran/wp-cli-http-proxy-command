@@ -333,6 +333,47 @@ Feature: HTTP proxy configuration
       Body: proxy reached http://example.com/proxy-check
       """
 
+  Scenario: Check a URL through a configured proxy with Requests 1.x from WordPress 6.1
+    Given an empty directory
+    # Download before the proxy is configured, so the download does not go through the test proxy.
+    When I run `wp core download --version=6.1.7 --skip-content`
+    Then STDOUT should contain:
+      """
+      Success: WordPress downloaded.
+      """
+
+    Given a proxy/index.php file:
+      """
+      <?php
+      header( 'Content-Type: text/plain' );
+      echo 'proxy reached ' . $_SERVER['REQUEST_URI'];
+      """
+    And I launch in the background `php -S 127.0.0.1:8901 -t proxy`
+    And a wp-cli.yml file:
+      """
+      http-proxy:
+        host: 127.0.0.1
+        port: 8901
+      """
+
+    When I run `wp eval --skip-wordpress 'echo WP_CLI\RequestsLibrary::get_version();'`
+    Then STDOUT should be:
+      """
+      v1
+      """
+
+    # Requests 1.x in WordPress 6.1 prints deprecation notices on PHP 8.1 and later.
+    When I try `wp http-proxy check http://example.com/requests-v1-check`
+    Then the return code should be 0
+    And STDOUT should contain:
+      """
+      Status: 200
+      """
+    And STDOUT should contain:
+      """
+      Body: proxy reached http://example.com/requests-v1-check
+      """
+
   Scenario: Authenticate a request through the configured proxy
     Given an empty directory
     And a proxy/index.php file:

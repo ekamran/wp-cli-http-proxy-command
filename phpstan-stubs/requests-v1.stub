@@ -18,3 +18,11 @@ class Requests_Proxy_HTTP {
 
 	public function fsockopen_header( &$headers ) {}
 }
+
+class Requests_Response {
+	/** @var string */
+	public $body = '';
+
+	/** @var int|false */
+	public $status_code = false;
+}
