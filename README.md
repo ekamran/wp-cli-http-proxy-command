@@ -92,7 +92,7 @@ Or configure host and port separately:
       host: proxy.example.com
       port: 8080
 
-Only HTTP proxies are supported. A URL with another scheme, such as `socks5://` or `https://`, is not used.
+Only HTTP proxies are supported. A URL with another scheme, such as `socks5://` or `https://`, is not used. Proxy auto-config (PAC) files and automatic proxy discovery are not supported either: set the HTTP proxy's own address.
 
 In a URL, write an IPv6 address in brackets, such as `http://[2001:db8::1]:8080`. The `host` setting accepts it with or without brackets.
 
