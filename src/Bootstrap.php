@@ -149,6 +149,23 @@ final class Bootstrap {
 		}
 	}
 
+	/**
+	 * Returns the proxy this package sets for a WP-CLI request to the URL, or null when it sets none.
+	 *
+	 * Uses the same rules as the request hooks, so `wp http-proxy check` reports the route they take.
+	 *
+	 * @param ProxyConfig $config Proxy configuration.
+	 * @param string      $url    Requested URL.
+	 * @return string|array{0: string, 1: string, 2: string}|null
+	 */
+	public static function proxy_for_url( ProxyConfig $config, $url ) {
+		if ( self::should_bypass_url( $config, $url ) ) {
+			return null;
+		}
+
+		return self::requests_proxy( $config );
+	}
+
 	private static function requests_proxy( ProxyConfig $config ) {
 		if ( defined( 'WP_PROXY_HOST' ) && defined( 'WP_PROXY_PORT' ) ) {
 			$proxy = WP_PROXY_HOST . ':' . WP_PROXY_PORT;

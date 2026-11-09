@@ -7,6 +7,11 @@ use WP_CLI;
 
 final class ProxyConfig {
 	/**
+	 * Reason given when the configuration cannot be used. The warning names the problem.
+	 */
+	const UNUSABLE = 'the http-proxy configuration cannot be used';
+
+	/**
 	 * @var array<string, mixed>
 	 */
 	private $config;
@@ -25,43 +30,38 @@ final class ProxyConfig {
 		$this->parts  = $parts;
 	}
 
-	public static function from_runner() {
-		return self::load_from_runner()['config'];
-	}
-
 	/**
 	 * Reads the http-proxy configuration and explains any part of it that cannot be used.
 	 *
-	 * @return array{config: self|null, warnings: string[]}
+	 * When there is no usable proxy, `off_reason` says why, for the http-proxy commands.
+	 *
+	 * @return array{config: self|null, warnings: string[], off_reason: string|null}
 	 */
 	public static function load_from_runner() {
-		$none   = [
-			'config'   => null,
-			'warnings' => [],
-		];
 		$runner = WP_CLI::get_runner();
 
-		if ( ! $runner || empty( $runner->extra_config['http-proxy'] ) || ! is_array( $runner->extra_config['http-proxy'] ) ) {
-			return $none;
+		if ( ! $runner || empty( $runner->extra_config['http-proxy'] ) ) {
+			return self::off( 'no http-proxy configuration' );
 		}
 
 		$config = $runner->extra_config['http-proxy'];
 
+		if ( ! is_array( $config ) ) {
+			return self::off( self::UNUSABLE, 'the http-proxy setting must be a block with url, host and port, or env, such as url: http://proxy.example.com:8080.' );
+		}
+
 		if ( isset( $config['enabled'] ) && ! self::to_bool( $config['enabled'] ) ) {
-			return $none;
+			return self::off( 'http-proxy has enabled: false' );
 		}
 
 		try {
 			$parts = self::resolve_parts( $config );
 		} catch ( InvalidArgumentException $exception ) {
-			return [
-				'config'   => null,
-				'warnings' => [ 'HTTP proxy disabled: ' . $exception->getMessage() ],
-			];
+			return self::off( self::UNUSABLE, $exception->getMessage() );
 		}
 
 		if ( ! $parts ) {
-			return $none;
+			return self::off( 'env: true found no proxy environment variable' );
 		}
 
 		$proxy    = new self( $config, $parts );
@@ -72,8 +72,22 @@ final class ProxyConfig {
 		}
 
 		return [
-			'config'   => $proxy,
-			'warnings' => $warnings,
+			'config'     => $proxy,
+			'warnings'   => $warnings,
+			'off_reason' => null,
+		];
+	}
+
+	/**
+	 * @param string      $reason  Why there is no usable proxy.
+	 * @param string|null $problem What is wrong with the configuration, for a warning.
+	 * @return array{config: null, warnings: string[], off_reason: string}
+	 */
+	private static function off( $reason, $problem = null ) {
+		return [
+			'config'     => null,
+			'warnings'   => null === $problem ? [] : [ 'HTTP proxy disabled: ' . $problem ],
+			'off_reason' => $reason,
 		];
 	}
 

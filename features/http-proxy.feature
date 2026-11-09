@@ -6,7 +6,7 @@ Feature: HTTP proxy configuration
     When I run `wp http-proxy status`
     Then STDOUT should be:
       """
-      HTTP proxy: disabled
+      HTTP proxy: disabled (no http-proxy configuration)
       """
 
   Scenario: Show enabled status from proxy URL config
@@ -86,7 +86,7 @@ Feature: HTTP proxy configuration
     When I run `/usr/bin/env HTTP_PROXY=http://proxy.example.com:8082 wp http-proxy status`
     Then STDOUT should be:
       """
-      HTTP proxy: disabled
+      HTTP proxy: disabled (no http-proxy configuration)
       """
 
   Scenario: Read proxy environment variables only when enabled in config
@@ -129,6 +129,25 @@ Feature: HTTP proxy configuration
       Port: 8443
       """
 
+  Scenario: Prefer a configured proxy address over environment lookup
+    Given an empty directory
+    And a wp-cli.yml file:
+      """
+      http-proxy:
+        url: http://configured-proxy.example.com:8088
+        env: true
+      """
+
+    When I run `/usr/bin/env HTTPS_PROXY=http://env-proxy.example.com:8443 wp http-proxy status`
+    Then STDOUT should contain:
+      """
+      Host: configured-proxy.example.com
+      """
+    And STDOUT should contain:
+      """
+      Port: 8088
+      """
+
   Scenario: Disable configured proxy explicitly
     Given an empty directory
     And a wp-cli.yml file:
@@ -141,7 +160,7 @@ Feature: HTTP proxy configuration
     When I run `wp http-proxy status`
     Then STDOUT should be:
       """
-      HTTP proxy: disabled
+      HTTP proxy: disabled (http-proxy has enabled: false)
       """
 
   Scenario: Reject an invalid proxy port
@@ -156,7 +175,7 @@ Feature: HTTP proxy configuration
     When I try `wp http-proxy status`
     Then STDOUT should be:
       """
-      HTTP proxy: disabled
+      HTTP proxy: disabled (the http-proxy configuration cannot be used)
       """
     And STDERR should be:
       """
@@ -175,11 +194,43 @@ Feature: HTTP proxy configuration
     When I try `wp http-proxy status`
     Then STDOUT should be:
       """
-      HTTP proxy: disabled
+      HTTP proxy: disabled (the http-proxy configuration cannot be used)
       """
     And STDERR should be:
       """
       Warning: HTTP proxy disabled: the http-proxy url has no port. Add one, such as http://proxy.example.com:8080.
+      """
+    And the return code should be 0
+
+    When I try `wp http-proxy check http://127.0.0.1:18897/unusable-config-check`
+    Then STDOUT should contain:
+      """
+      Proxy: none (the http-proxy configuration cannot be used)
+      """
+    And STDOUT should not contain:
+      """
+      secret-token
+      """
+    And STDERR should contain:
+      """
+      Warning: HTTP proxy disabled: the http-proxy url has no port.
+      """
+
+  Scenario: Warn when the http-proxy setting is not a block
+    Given an empty directory
+    And a wp-cli.yml file:
+      """
+      http-proxy: http://user:secret-token@proxy.example.com:8080
+      """
+
+    When I try `wp http-proxy status`
+    Then STDOUT should be:
+      """
+      HTTP proxy: disabled (the http-proxy configuration cannot be used)
+      """
+    And STDERR should be:
+      """
+      Warning: HTTP proxy disabled: the http-proxy setting must be a block with url, host and port, or env, such as url: http://proxy.example.com:8080.
       """
     And the return code should be 0
 
@@ -194,7 +245,7 @@ Feature: HTTP proxy configuration
     When I try `wp http-proxy status`
     Then STDOUT should be:
       """
-      HTTP proxy: disabled
+      HTTP proxy: disabled (the http-proxy configuration cannot be used)
       """
     And STDERR should be:
       """
@@ -213,7 +264,7 @@ Feature: HTTP proxy configuration
     When I try `/usr/bin/env HTTPS_PROXY=https://proxy.example.com:8443 wp http-proxy status`
     Then STDOUT should be:
       """
-      HTTP proxy: disabled
+      HTTP proxy: disabled (the http-proxy configuration cannot be used)
       """
     And STDERR should be:
       """
@@ -232,7 +283,7 @@ Feature: HTTP proxy configuration
     When I run `wp http-proxy status`
     Then STDOUT should be:
       """
-      HTTP proxy: disabled
+      HTTP proxy: disabled (env: true found no proxy environment variable)
       """
 
   Scenario: Warn when the proxy configuration has no address
@@ -247,7 +298,7 @@ Feature: HTTP proxy configuration
     When I try `wp http-proxy status`
     Then STDOUT should be:
       """
-      HTTP proxy: disabled
+      HTTP proxy: disabled (the http-proxy configuration cannot be used)
       """
     And STDERR should be:
       """
@@ -287,7 +338,7 @@ Feature: HTTP proxy configuration
     When I try `wp http-proxy status`
     Then STDOUT should be:
       """
-      HTTP proxy: disabled
+      HTTP proxy: disabled (the http-proxy configuration cannot be used)
       """
     And STDERR should be:
       """
@@ -404,8 +455,8 @@ Feature: HTTP proxy configuration
     And a wp-cli.yml file:
       """
       http-proxy:
-        host: proxy.example.com
-        port: 8086
+        host: 127.0.0.1
+        port: 18897
       """
 
     When I run `wp eval 'echo WP_PROXY_HOST . ":" . WP_PROXY_PORT;'`
@@ -419,6 +470,23 @@ Feature: HTTP proxy configuration
     Then STDOUT should be:
       """
       existing proxy reached http://proxy-target.invalid/existing-proxy-check
+      """
+
+    # status and check run before WordPress loads, so they use the http-proxy configuration.
+    When I run `wp http-proxy status`
+    Then STDOUT should contain:
+      """
+      Port: 18897
+      """
+
+    When I try `wp http-proxy check http://proxy-target.invalid/before-wordpress-check`
+    Then STDOUT should contain:
+      """
+      Proxy: 127.0.0.1:18897
+      """
+    And STDERR should contain:
+      """
+      Error: Failed to get url 'http://proxy-target.invalid/before-wordpress-check':
       """
 
   Scenario: Route a WordPress core request through the configured proxy
@@ -483,8 +551,12 @@ Feature: HTTP proxy configuration
         port: 18899
       """
 
-    When I run `wp http-proxy check http://example.com/proxy-check`
+    When I run `wp http-proxy check http://example.com/proxy-check --body`
     Then STDOUT should contain:
+      """
+      Proxy: 127.0.0.1:18899
+      """
+    And STDOUT should contain:
       """
       Status: 200
       """
@@ -523,7 +595,7 @@ Feature: HTTP proxy configuration
       """
 
     # Requests 1.x in WordPress 6.1 prints deprecation notices on PHP 8.1 and later.
-    When I try `wp http-proxy check http://example.com/requests-v1-check`
+    When I try `wp http-proxy check http://example.com/requests-v1-check --body`
     Then the return code should be 0
     And STDOUT should contain:
       """
@@ -557,14 +629,26 @@ Feature: HTTP proxy configuration
         url: http://user%40example.com:p%40ss@127.0.0.1:18894
       """
 
-    When I run `wp http-proxy check http://auth-target.invalid/proxy-auth-check`
+    When I run `wp http-proxy check http://auth-target.invalid/proxy-auth-check --body`
     Then STDOUT should contain:
+      """
+      Proxy: 127.0.0.1:18894 (with authentication)
+      """
+    And STDOUT should contain:
       """
       Status: 200
       """
     And STDOUT should contain:
       """
       Body: authenticated proxy reached http://auth-target.invalid/proxy-auth-check
+      """
+    And STDOUT should not contain:
+      """
+      p@ss
+      """
+    And STDOUT should not contain:
+      """
+      p%40ss
       """
 
   Scenario: Authenticate through the proxy with Requests' socket transport
@@ -615,7 +699,7 @@ Feature: HTTP proxy configuration
         url: http://user%40example.com:p%40ss@127.0.0.1:18902
       """
 
-    When I run `wp http-proxy check http://auth-target.invalid/socket-auth-check`
+    When I run `wp http-proxy check http://auth-target.invalid/socket-auth-check --body`
     Then STDOUT should contain:
       """
       Status: 200
@@ -656,7 +740,7 @@ Feature: HTTP proxy configuration
         port: 18903
       """
 
-    When I run `wp http-proxy check http://localhost:18904/helper-localhost`
+    When I run `wp http-proxy check http://localhost:18904/helper-localhost --body`
     Then STDOUT should contain:
       """
       Body: proxy reached http://localhost:18904/helper-localhost
@@ -686,8 +770,12 @@ Feature: HTTP proxy configuration
           - 127.0.0.1
       """
 
-    When I run `wp http-proxy check http://127.0.0.1:18898/direct-check`
+    When I run `wp http-proxy check http://127.0.0.1:18898/direct-check --body`
     Then STDOUT should contain:
+      """
+      Proxy: none (the host is in bypass-hosts)
+      """
+    And STDOUT should contain:
       """
       Status: 200
       """
@@ -714,8 +802,12 @@ Feature: HTTP proxy configuration
           - "*.0.0.1"
       """
 
-    When I run `wp http-proxy check http://127.0.0.1:18898/wildcard-direct-check`
+    When I run `wp http-proxy check http://127.0.0.1:18898/wildcard-direct-check --body`
     Then STDOUT should contain:
+      """
+      Proxy: none (the host is in bypass-hosts)
+      """
+    And STDOUT should contain:
       """
       Status: 200
       """
@@ -748,7 +840,7 @@ Feature: HTTP proxy configuration
           - 127.0.0.1
       """
 
-    When I run `wp http-proxy check http://127.0.0.1:18892/start`
+    When I run `wp http-proxy check http://127.0.0.1:18892/start --body`
     Then STDOUT should contain:
       """
       Body: proxy reached http://redirect-target.invalid/through-proxy
@@ -778,7 +870,7 @@ Feature: HTTP proxy configuration
           - 127.0.0.1
       """
 
-    When I run `wp http-proxy check http://redirect-source.invalid/start`
+    When I run `wp http-proxy check http://redirect-source.invalid/start --body`
     Then STDOUT should contain:
       """
       Body: direct redirect reached
@@ -799,3 +891,180 @@ Feature: HTTP proxy configuration
       Error: Failed to get url 'http://example.com/proxy-check':
       """
     And the return code should be 1
+
+  Scenario: Check reports a direct request and the body size by default
+    Given an empty directory
+    And a target/index.php file:
+      """
+      <?php
+      header( 'Content-Type: text/plain' );
+      echo 'direct request reached';
+      """
+    And I launch in the background `php -S 127.0.0.1:18905 -t target`
+
+    When I run `wp http-proxy check http://127.0.0.1:18905/no-config-check`
+    Then STDOUT should be:
+      """
+      Proxy: none (no http-proxy configuration)
+      Status: 200
+      Body size: 22 bytes
+      """
+
+  Scenario: Check notes a cURL proxy variable when the package sets no proxy
+    Given an empty directory
+    And a proxy/index.php file:
+      """
+      <?php
+      header( 'Content-Type: text/plain' );
+      echo 'environment proxy reached ' . $_SERVER['REQUEST_URI'];
+      """
+    And a target/index.php file:
+      """
+      <?php
+      header( 'Content-Type: text/plain' );
+      echo 'direct request reached';
+      """
+    And I launch in the background `php -S 127.0.0.1:18906 -t proxy`
+    And I launch in the background `php -S 127.0.0.1:18907 -t target`
+
+    When I run `/usr/bin/env http_proxy=http://127.0.0.1:18906 wp http-proxy check http://env-target.invalid/env-check --body`
+    Then STDOUT should contain:
+      """
+      Proxy: none (no http-proxy configuration)
+      """
+    And STDOUT should contain:
+      """
+      Note: cURL also reads http_proxy, so this request can still go through a proxy set there.
+      """
+    And STDOUT should contain:
+      """
+      Body: environment proxy reached http://env-target.invalid/env-check
+      """
+
+    # cURL reads http_proxy only in lowercase.
+    When I run `/usr/bin/env HTTP_PROXY=http://127.0.0.1:18906 wp http-proxy check http://127.0.0.1:18907/uppercase-check --body`
+    Then STDOUT should not contain:
+      """
+      Note:
+      """
+    And STDOUT should contain:
+      """
+      Body: direct request reached
+      """
+
+  Scenario: Check notes NO_PROXY, which makes cURL skip the configured proxy
+    Given an empty directory
+    And a target/index.php file:
+      """
+      <?php
+      header( 'Content-Type: text/plain' );
+      echo 'direct request reached';
+      """
+    And I launch in the background `php -S 127.0.0.1:18908 -t target`
+    And a wp-cli.yml file:
+      """
+      http-proxy:
+        host: 127.0.0.1
+        port: 18897
+      """
+
+    When I run `/usr/bin/env NO_PROXY=127.0.0.1 wp http-proxy check http://127.0.0.1:18908/no-proxy-check --body`
+    Then STDOUT should contain:
+      """
+      Proxy: 127.0.0.1:18897
+      """
+    And STDOUT should contain:
+      """
+      Note: cURL also reads NO_PROXY, so a host listed there skips this proxy.
+      """
+    And STDOUT should contain:
+      """
+      Body: direct request reached
+      """
+
+  Scenario: Use the http-proxy block from the configuration file with the highest priority
+    Given an empty directory
+    # The test framework loads this package through the global config file, so keep loading it.
+    When I run `wp eval --skip-wordpress 'echo getenv( "WP_CLI_CONFIG_PATH" );'`
+    Then save STDOUT as {TEST_CONFIG_PATH}
+
+    Given a global.yml file:
+      """
+      _:
+        inherit: {TEST_CONFIG_PATH}
+      http-proxy:
+        url: http://proxy-user:proxy-password@proxy.example.com:8087
+      """
+    And a wp-cli.yml file:
+      """
+      http-proxy:
+        bypass-hosts:
+          - localhost
+      """
+
+    When I try `/usr/bin/env WP_CLI_CONFIG_PATH=global.yml wp http-proxy status`
+    Then STDERR should contain:
+      """
+      Warning: HTTP proxy disabled: the http-proxy configuration has no url, host and port, or env setting.
+      """
+    And STDOUT should be:
+      """
+      HTTP proxy: disabled (the http-proxy configuration cannot be used)
+      """
+
+    Given a wp-cli.yml file:
+      """
+      _:
+        merge: true
+      http-proxy:
+        bypass-hosts:
+          - localhost
+      """
+
+    When I run `/usr/bin/env WP_CLI_CONFIG_PATH=global.yml wp http-proxy status`
+    Then STDOUT should contain:
+      """
+      Host: proxy.example.com
+      """
+    And STDOUT should contain:
+      """
+      Authentication: yes
+      """
+    And STDOUT should contain:
+      """
+      Bypass hosts: localhost
+      """
+
+  Scenario: Check reports the proxy from WordPress proxy constants that a required file defines
+    Given an empty directory
+    And a proxy/index.php file:
+      """
+      <?php
+      header( 'Content-Type: text/plain' );
+      echo 'constant proxy reached ' . $_SERVER['REQUEST_URI'];
+      """
+    And a proxy-constants.php file:
+      """
+      <?php
+      define( 'WP_PROXY_HOST', '127.0.0.1' );
+      define( 'WP_PROXY_PORT', 18909 );
+      """
+    And I launch in the background `php -S 127.0.0.1:18909 -t proxy`
+    And a wp-cli.yml file:
+      """
+      require:
+        - proxy-constants.php
+      http-proxy:
+        host: 127.0.0.1
+        port: 18897
+      """
+
+    When I run `wp http-proxy check http://constant-target.invalid/constant-check --body`
+    Then STDOUT should contain:
+      """
+      Proxy: 127.0.0.1:18909
+      """
+    And STDOUT should contain:
+      """
+      Body: constant proxy reached http://constant-target.invalid/constant-check
+      """
