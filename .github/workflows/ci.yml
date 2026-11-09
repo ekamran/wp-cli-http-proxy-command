@@ -6,17 +6,40 @@ on:
     branches:
       - main
   schedule:
-    # Weekly, so a change in WP-CLI, its test framework or a plugin they download shows up without a push.
+    # Weekly, so a change in WP-CLI, its test framework, WordPress trunk or a plugin they download shows up without a push.
     - cron: '17 3 * * 1'
   workflow_dispatch:
 
 permissions:
   contents: read
 
+# A new push to a pull request replaces its older run. Runs on main and the weekly run always finish.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
+  actionlint:
+    name: Lint workflows
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+
+    steps:
+      - name: Check out source code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Dependabot does not update docker:// references, so this digest is updated by hand.
+      - name: Run actionlint
+        uses: docker://rhysd/actionlint@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667 # 1.7.12
+        with:
+          args: -color
+
   code-quality:
     name: Code quality
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
 
     steps:
       - name: Check out source code
@@ -25,7 +48,7 @@ jobs:
           persist-credentials: false
 
       - name: Set up PHP
-        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2
+        uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # 2.40.0
         with:
           php-version: '8.3'
           coverage: none
@@ -47,10 +70,21 @@ jobs:
         run: composer phpstan
 
   test:
-    name: WP-CLI ${{ matrix.wp_cli }} / PHP ${{ matrix.php }} / WordPress ${{ matrix.wordpress }}
+    name: WP-CLI ${{ matrix.wp_cli }} / PHP ${{ matrix.php }} / WordPress ${{ matrix.wordpress }}${{ matrix.mysql && ' / MySQL' || '' }}
+    # ubuntu-22.04 is the runner WP-CLI's own Behat jobs use.
     runs-on: ubuntu-22.04
     # A hung step would otherwise hold the runner for GitHub's default of 6 hours.
     timeout-minutes: 20
+    # Used only by the MySQL job; the other jobs use SQLite. The same settings as WP-CLI's own workflows.
+    env:
+      MYSQL_HOST: 127.0.0.1
+      MYSQL_TCP_PORT: 3306
+      WP_CLI_TEST_DBROOTUSER: root
+      WP_CLI_TEST_DBROOTPASS: root
+      WP_CLI_TEST_DBNAME: wp_cli_test
+      WP_CLI_TEST_DBUSER: wp_cli_test
+      WP_CLI_TEST_DBPASS: password1
+      WP_CLI_TEST_DBHOST: 127.0.0.1:3306
     strategy:
       fail-fast: false
       matrix:
@@ -63,12 +97,41 @@ jobs:
         # from libraries bundled in WP-CLI itself, and WP-CLI recommends its nightly build on
         # PHP 8.5 (https://github.com/wp-cli/wp-cli/issues/6271). PHP 8.5 is tested with
         # WP-CLI nightly instead.
+        #
+        # PHP 7.2 and 7.3 run WordPress 6.9, the last release that supports them. WordPress
+        # trunk shows changes to the core HTTP API before they are released. The MySQL job
+        # covers the database most sites run; the others use SQLite.
         include:
           - php: '7.2'
             wordpress: '6.9'
             wp_cli: '2.12.0'
+          - php: '7.3'
+            wordpress: '6.9'
+            wp_cli: '2.12.0'
+          - php: '7.4'
+            wordpress: latest
+            wp_cli: '2.12.0'
+          - php: '8.0'
+            wordpress: latest
+            wp_cli: '2.12.0'
+          - php: '8.1'
+            wordpress: latest
+            wp_cli: '2.12.0'
+          - php: '8.2'
+            wordpress: latest
+            wp_cli: '2.12.0'
+          - php: '8.3'
+            wordpress: latest
+            wp_cli: '2.12.0'
+          - php: '8.3'
+            wordpress: latest
+            wp_cli: '2.12.0'
+            mysql: mysql-8.4
           - php: '8.4'
             wordpress: latest
+            wp_cli: '2.12.0'
+          - php: '8.4'
+            wordpress: trunk
             wp_cli: '2.12.0'
           - php: '8.5'
             wordpress: latest
@@ -80,11 +143,26 @@ jobs:
         with:
           persist-credentials: false
 
+      # The same settings as WP-CLI's own workflows: MySQL 8.4 turns mysql_native_password on and makes it the default.
+      - name: Set up MySQL
+        id: setup-mysql
+        if: ${{ matrix.mysql }}
+        uses: shogo82148/actions-setup-mysql@13a38f2af408e58a0c80168fc620a63a15357339 # v1.56.2
+        with:
+          mysql-version: ${{ matrix.mysql }}
+          auto-start: true
+          root-password: ${{ env.WP_CLI_TEST_DBROOTPASS }}
+          user: ${{ env.WP_CLI_TEST_DBUSER }}
+          password: ${{ env.WP_CLI_TEST_DBPASS }}
+          my-cnf: |
+            mysql_native_password=ON
+            authentication_policy=mysql_native_password,
+
       - name: Set up PHP
-        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2
+        uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # 2.40.0
         with:
           php-version: ${{ matrix.php }}
-          extensions: pdo_sqlite, zip
+          extensions: pdo_sqlite, mysql, zip
           # setup-php's production php.ini leaves out E_DEPRECATED; report it in the test runs.
           ini-values: error_reporting=E_ALL
           coverage: none
@@ -161,8 +239,14 @@ jobs:
           }
           PHP
 
+      # As in WP-CLI's own workflows, so the client from the MySQL setup step is the only one.
+      - name: Remove the system MySQL client
+        if: ${{ matrix.mysql }}
+        run: sudo rm -f /usr/bin/mysql /usr/bin/mysqldump
+
       - name: Run Behat
         env:
           WP_VERSION: ${{ matrix.wordpress }}
-          WP_CLI_TEST_DBTYPE: sqlite
+          WP_CLI_TEST_DBTYPE: ${{ matrix.mysql && 'mysql' || 'sqlite' }}
+          WP_CLI_TEST_DBSOCKET: ${{ matrix.mysql && format('{0}/tmp/mysql.sock', steps.setup-mysql.outputs.base-dir) || '' }}
         run: composer behat
