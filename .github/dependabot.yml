@@ -1,0 +1,12 @@
+# Keeps the pinned actions in the workflows up to date. Dependabot does not update docker:// references,
+# so the actionlint image digest in ci.yml is updated by hand.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      github-actions:
+        patterns:
+          - '*'

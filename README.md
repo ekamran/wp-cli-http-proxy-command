@@ -63,8 +63,9 @@ Requires PHP 7.2.24 or later, and WP-CLI 2.12 or a later 2.x release, or WP-CLI 
 
 Tested with:
 
-- WP-CLI 2.12.0 on PHP 7.2 and PHP 8.4.
+- WP-CLI 2.12.0 on PHP 7.2 to 8.4 with SQLite, and on PHP 8.3 with MySQL 8.4.
 - WP-CLI nightly (3.0.0-alpha) on PHP 8.5.
+- WordPress 6.9 on PHP 7.2 and 7.3, the latest WordPress release on newer PHP versions, and WordPress trunk on PHP 8.4.
 - Linux and macOS, and PHP without the cURL extension (see [Limitations](#limitations)). Not tested on Windows.
 - End to end on the official `wordpress:cli-php8.4` image, with WP-CLI 2.12.0 and nightly, where a Squid 6.13 proxy was the only way out of the network: `wp package install`, `update` and `uninstall`; `wp core download`, `install`, `check-update`, `update` and `verify-checksums`; `wp plugin install`, `update` and `verify-checksums`; `wp theme install`; `wp language core install`; and `wp cli check-update`. With no proxy login, a Basic login, and `env: true`. The `wp core`, `wp plugin`, `wp theme`, `wp language` and `wp cli` steps also passed with a Digest login, and with an NTLM login on a Debian-based `php:8.4-cli` image with the package loaded through `require:`.
 
