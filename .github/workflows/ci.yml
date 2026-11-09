@@ -19,6 +19,9 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # Every job name here, including each test job name built from the matrix, is a required check in
+  # the "main: require CI" ruleset (ID 26892599), except the WordPress trunk job. Renaming or removing
+  # one blocks every pull request until the ruleset is updated to match.
   actionlint:
     name: Lint workflows
     runs-on: ubuntu-24.04
