@@ -568,8 +568,11 @@ Feature: HTTP proxy configuration
   Scenario: Check a URL through a configured proxy with Requests 1.x from WordPress 6.1
     Given an empty directory
     # Download before the proxy is configured, so the download does not go through the test proxy.
-    When I run `wp core download --version=6.1.7 --skip-content`
-    Then STDOUT should contain:
+    # The WP-CLI 2.12.0 phar cleans its cache on exit in about 1 run in 51. Its bundled
+    # Symfony Finder then prints deprecation notices on PHP 8.1 and later.
+    When I try `wp core download --version=6.1.7 --skip-content`
+    Then the return code should be 0
+    And STDOUT should contain:
       """
       Success: WordPress downloaded.
       """
